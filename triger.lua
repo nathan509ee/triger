@@ -1,57 +1,57 @@
-local Camera = workspace.CurrentCamera
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local LocalPlayer = Players.LocalPlayer
-local Holding = false
+-- Variáveis
+local player = game.Players.LocalPlayer  -- Acessa o jogador
+local character = player.Character or player.CharacterAdded:Wait()  -- Acessa o personagem
+local humanoid = character:WaitForChild("Humanoid")  -- Acessa o Humanoid do personagem
+local userInputService = game:GetService("UserInputService")  -- Para detectar a entrada do usuário
 
--- Função para verificar se o jogador está mirando em outro jogador
-local function checkAim()
-    -- Realiza um raycast a partir da posição da câmera para onde ela está mirando
-    local mousePos = UserInputService:GetMouseLocation()
-    local screenCenter = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
-    local ray = Ray.new(screenCenter.Origin, screenCenter.Direction * 1000) -- Ajuste o alcance aqui se necessário
+-- Definindo as propriedades de voo
+local flying = false
+local flightSpeed = 50  -- Velocidade do voo
+local liftForce = 25  -- Força para subir
+local bodyVelocity  -- Variável que armazenará a força de movimento
 
-    local hit = workspace:FindPartOnRay(ray, LocalPlayer.Character) -- Impede que o próprio jogador seja atingido
+-- Função para iniciar o voo
+local function startFlying()
+    if not flying then
+        flying = true
 
-    -- Se a raycast acertar algo (e não for o próprio jogador), verifica se é outro jogador
-    if hit and hit.Parent and hit.Parent:FindFirstChild("Humanoid") then
-        local targetPlayer = Players:GetPlayerFromCharacter(hit.Parent)
-        if targetPlayer and targetPlayer ~= LocalPlayer then
-            -- Aqui você pode simular o disparo ou realizar alguma ação
-            print("Mira em: " .. targetPlayer.Name)
-            return true
-        end
+        -- Criando o BodyVelocity
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)  -- Força máxima
+        bodyVelocity.Velocity = Vector3.new(0, liftForce, 0)  -- Força inicial para começar a voar
+        bodyVelocity.Parent = character:WaitForChild("HumanoidRootPart")
+
+        -- Atualiza a velocidade com base na entrada do jogador
+        userInputService.InputChanged:Connect(function(input)
+            if flying then
+                if input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local mouseDirection = input.Position - Vector2.new(game:GetService("Workspace").CurrentCamera.WorldToScreenPoint(character.HumanoidRootPart.Position).X, game:GetService("Workspace").CurrentCamera.WorldToScreenPoint(character.HumanoidRootPart.Position).Y)
+                    bodyVelocity.Velocity = Vector3.new(mouseDirection.X, liftForce, mouseDirection.Y) * flightSpeed / 100
+                end
+            end
+        end)
     end
-    return false
 end
 
--- Função que aciona o disparo
-local function triggerFire()
-    if checkAim() then
-        -- Lógica para disparo (substitua com ação real de disparo, se aplicável)
-        print("Disparando no alvo!")
+-- Função para parar de voar
+local function stopFlying()
+    if flying then
+        flying = false
+        if bodyVelocity then
+            bodyVelocity:Destroy()  -- Remove o BodyVelocity
+        end
     end
 end
 
--- Detecta se o jogador segura uma tecla (exemplo: botão de disparo)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed then
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then -- Botão esquerdo do mouse
-            Holding = true
+-- Detectando teclas pressionadas
+userInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.Space then  -- Quando pressionar a tecla de espaço, começar ou parar de voar
+        if flying then
+            stopFlying()
+        else
+            startFlying()
         end
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then -- Botão esquerdo do mouse
-        Holding = false
-    end
-end)
-
--- Dispara automaticamente enquanto a tecla estiver pressionada
-RunService.Heartbeat:Connect(function()
-    if Holding then
-        triggerFire()
     end
 end)
