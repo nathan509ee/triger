@@ -1,75 +1,65 @@
--- Variáveis
-local player = game.Players.LocalPlayer  -- Acessa o jogador
-local character = player.Character or player.CharacterAdded:Wait()  -- Acessa o personagem
-local humanoid = character:WaitForChild("Humanoid")  -- Acessa o Humanoid do personagem
-local userInputService = game:GetService("UserInputService")  -- Para detectar a entrada do usuário
+-- Serviços e variáveis
+local Camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Holding = false  -- Se o jogador está mantendo um botão pressionado (pode ser usado para ativar a mira)
 
--- Definindo as propriedades de voo
-local flying = false
-local flightSpeed = 50  -- Velocidade do voo
-local liftForce = 25  -- Força para subir
-local bodyVelocity  -- Variável que armazenará a força de movimento
-local moveDirection = Vector3.new(0, 0, 0)  -- Direção do movimento
-
--- Função para iniciar o voo
-local function startFlying()
-    if not flying then
-        flying = true
-
-        -- Criando o BodyVelocity
-        bodyVelocity = Instance.new("BodyVelocity")
-        bodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)  -- Força máxima
-        bodyVelocity.Velocity = Vector3.new(0, liftForce, 0)  -- Força inicial para começar a voar
-        bodyVelocity.Parent = character:WaitForChild("HumanoidRootPart")
-    end
+-- Função para calcular a direção da mira
+local function calcularDirecaoMira(playerPos, alvoPos)
+    return (alvoPos - playerPos).unit  -- Retorna o vetor normalizado
 end
 
--- Função para parar de voar
-local function stopFlying()
-    if flying then
-        flying = false
-        if bodyVelocity then
-            bodyVelocity:Destroy()  -- Remove o BodyVelocity
+-- Função para encontrar o inimigo mais próximo
+local function encontrarAlvoMaisProximo()
+    local alvoMaisProximo = nil
+    local menorDistancia = math.huge
+
+    for _, jogador in ipairs(Players:GetPlayers()) do
+        if jogador ~= LocalPlayer and jogador.Character and jogador.Character:FindFirstChild("HumanoidRootPart") then
+            local alvoPos = jogador.Character.HumanoidRootPart.Position
+            local distancia = (Camera.CFrame.Position - alvoPos).magnitude
+
+            if distancia < menorDistancia then
+                menorDistancia = distancia
+                alvoMaisProximo = jogador
+            end
         end
     end
+
+    return alvoMaisProximo
 end
 
--- Função para atualizar o movimento
-local function updateMovement()
-    if flying then
-        -- A direção do movimento é baseada nas teclas pressionadas
-        local forward = 0
-        local backward = 0
+-- Função para ajustar a mira do jogador
+local function ajustarMiraParaAlvo()
+    local alvo = encontrarAlvoMaisProximo()
+    if alvo and alvo.Character and alvo.Character:FindFirstChild("HumanoidRootPart") then
+        local alvoPos = alvo.Character.HumanoidRootPart.Position
+        local direcaoMira = calcularDirecaoMira(Camera.CFrame.Position, alvoPos)
 
-        -- Detecta as teclas pressionadas (W para frente, S para trás)
-        if userInputService:IsKeyDown(Enum.KeyCode.W) then
-            forward = 1
-        elseif userInputService:IsKeyDown(Enum.KeyCode.S) then
-            backward = -1
-        end
-        
-        -- Definindo a direção do movimento no eixo Z (frente/trás)
-        moveDirection = Vector3.new(0, liftForce, forward + backward) * flightSpeed / 10
-
-        -- Atualiza a velocidade do BodyVelocity com a direção
-        bodyVelocity.Velocity = moveDirection
+        -- Ajuste a posição da câmera para apontar na direção do alvo (invisível ao jogador)
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + direcaoMira)
     end
 end
 
--- Detectando teclas pressionadas
-userInputService.InputBegan:Connect(function(input, gameProcessed)
+-- Função para lidar com entrada do jogador (detecção de pressionamento de tecla, por exemplo)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.Space then  -- Quando pressionar a tecla de espaço, começar ou parar de voar
-        if flying then
-            stopFlying()
-        else
-            startFlying()
-        end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then  -- Clique do botão direito do mouse
+        Holding = true
     end
 end)
 
--- Atualiza o movimento enquanto voa
-game:GetService("RunService").Heartbeat:Connect(function()
-    updateMovement()
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then  -- Soltar o botão direito do mouse
+        Holding = false
+    end
+end)
+
+-- Atualização contínua da mira
+RunService.RenderStepped:Connect(function()
+    if Holding then
+        ajustarMiraParaAlvo()  -- Ajusta a mira quando o jogador está mantendo o botão pressionado
+    end
 end)
